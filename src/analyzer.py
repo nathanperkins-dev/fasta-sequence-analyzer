@@ -1,3 +1,6 @@
+import argparse
+
+
 def read_fasta(filename):
     sequences = {}
     current_name = None
@@ -13,6 +16,14 @@ def read_fasta(filename):
                 sequences[current_name] += line
 
     return sequences
+
+
+def validate_sequence(sequence):
+    for base in sequence:
+        if base not in ["A", "T", "G", "C"]:
+            return False
+
+    return True
 
 
 def sequence_length(sequence):
@@ -124,39 +135,16 @@ def find_orfs(rna):
     return orfs
 
 
-sequences = read_fasta("../data/example.fasta")
 
-number_of_sequences = len(sequences)
-
-total_length = 0
-total_gc = 0
-total_orfs = 0
-longest_sequence = None
-
-for name, seq in sequences.items():
-    length = sequence_length(seq)
-    total_length += length
-
-    if longest_sequence is None or length > longest_sequence[1]:
-        longest_sequence = (name, length)
-
-    gc = gc_content(seq)
-    total_gc += gc
-
-    composition = nucleotide_composition(seq)
-    reverse = reverse_complement(seq)
-    rna = transcribe(seq)
+def analyze_sequence(sequence):
+    length = sequence_length(sequence)
+    gc = gc_content(sequence)
+    composition = nucleotide_composition(sequence)
+    reverse = reverse_complement(sequence)
+    rna = transcribe(sequence)
     protein = translate(rna)
     aa_composition = amino_acid_composition(protein)
     orfs = find_orfs(rna)
-
-    number_of_orfs = len(orfs)
-    total_orfs += number_of_orfs
-
-    if orfs:
-        longest_orf = max(orfs, key=len)
-    else:
-        longest_orf = None
 
     orf_proteins = []
 
@@ -164,9 +152,85 @@ for name, seq in sequences.items():
         orf_protein = translate(orf)
         orf_proteins.append(orf_protein)
 
+    if orfs:
+        longest_orf = max(orfs, key=len)
+    else:
+        longest_orf = None
+
     if longest_orf:
         longest_orf_index = orfs.index(longest_orf)
         longest_protein = orf_proteins[longest_orf_index]
+    else:
+        longest_protein = None
+
+    return {
+        "length": length,
+        "gc": gc,
+        "composition": composition,
+        "reverse": reverse,
+        "rna": rna,
+        "protein": protein,
+        "aa_composition": aa_composition,
+        "orfs": orfs,
+        "orf_proteins": orf_proteins,
+        "longest_orf": longest_orf,
+        "longest_protein": longest_protein
+    }
+
+
+
+
+parser = argparse.ArgumentParser(
+    description="Analyze DNA and RNA FASTA sequences."
+)
+
+parser.add_argument("filename", help="Path to FASTA file")
+
+args = parser.parse_args()
+
+sequences = read_fasta(args.filename)
+
+number_of_sequences = len(sequences)
+valid_sequences = 0
+
+total_length = 0
+total_gc = 0
+total_orfs = 0
+longest_sequence = None
+
+for name, seq in sequences.items():
+    if not validate_sequence(seq):
+        print(f"Invalid DNA sequence: {name}")
+        continue
+
+    valid_sequences += 1
+
+    results = analyze_sequence(seq)
+
+    length = results["length"]
+    total_length += length
+
+    if longest_sequence is None or length > longest_sequence[1]:
+        longest_sequence = (name, length)
+
+    gc = results["gc"]
+    total_gc += gc
+
+    composition = results["composition"]
+    reverse = results["reverse"]
+    rna = results["rna"]
+    protein = results["protein"]
+    aa_composition = results["aa_composition"]
+    orfs = results["orfs"]
+
+    number_of_orfs = len(orfs)
+    total_orfs += number_of_orfs
+
+    longest_orf = results["longest_orf"]
+
+    orf_proteins = results["orf_proteins"]
+
+    longest_protein = results["longest_protein"]
 
     print(f"{name}: {length} bp | GC content: {gc:.2f}%")
     print(f"Nucleotide composition: A={composition['A']} | T={composition['T']} | G={composition['G']} | C={composition['C']}")
@@ -192,11 +256,14 @@ for name, seq in sequences.items():
 
     print(f"Amino acid composition: {aa_composition}")
 
-average_length = total_length / number_of_sequences
-average_gc = total_gc / number_of_sequences
+if valid_sequences > 0:
+    average_length = total_length / valid_sequences
+    average_gc = total_gc / valid_sequences
 
-print(f"Longest sequence: {longest_sequence[0]} ({longest_sequence[1]} bp)")
-print(f"Average sequence length: {average_length:.2f} bp")
-print(f"Average GC content: {average_gc:.2f}%")
-print(f"Total ORFs found: {total_orfs}")
+    print(f"Longest sequence: {longest_sequence[0]} ({longest_sequence[1]} bp)")
+    print(f"Average sequence length: {average_length:.2f} bp")
+    print(f"Average GC content: {average_gc:.2f}%")
+    print(f"Total ORFs found: {total_orfs}")
+else:
+    print("No valid DNA sequences found.")
 
